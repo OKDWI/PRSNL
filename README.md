@@ -1,7 +1,6 @@
 <p align="center">
   <img src="docs/screenshots/1.jpeg" width="180" />
   <img src="docs/screenshots/2.jpeg" width="180" />
-  <img src="docs/screenshots/3.jpeg" width="180" />
   <img src="docs/screenshots/4.jpeg" width="180" />
   <img src="docs/screenshots/5.jpeg" width="180" />
 </p>
