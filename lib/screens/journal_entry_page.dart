@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:prsnl_final/navbar.dart';
-import 'package:prsnl_final/screens/journal_home.dart';
-import '../ui/journal_editor.dart'; // ← NEW
-import '../widgets/background.dart'; // ← Modular background
+
+import '../ui/journal_editor.dart';
+import '../widgets/background.dart';
 
 class JournalEntryPage extends StatefulWidget {
   final String? docId;
-  final String? initialTitle;
-  final String? initialContent;
+  final String initialTitle;
+  final String initialContent;
 
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
-  final Function(int) onTabChange;
+
+  final VoidCallback onClose;
 
   const JournalEntryPage({
     Key? key,
-    this.docId,
-    this.initialTitle,
-    this.initialContent,
     required this.isDarkMode,
     required this.onToggleTheme,
-    required this.onTabChange,
+    required this.onClose,
+    this.docId,
+    this.initialTitle = "",
+    this.initialContent = "",
   }) : super(key: key);
 
   @override
@@ -32,51 +32,97 @@ class JournalEntryPage extends StatefulWidget {
 class _JournalEntryPageState extends State<JournalEntryPage> {
   late TextEditingController _titleController;
   late TextEditingController _contentController;
-  int _selectedIndex = 0;
+
+  String? savedDocId;
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.initialTitle ?? "");
-    _contentController = TextEditingController(
-      text: widget.initialContent ?? "",
-    );
+    _titleController = TextEditingController(text: widget.initialTitle);
+    _contentController = TextEditingController(text: widget.initialContent);
+
+    savedDocId = widget.docId;
   }
 
-  @override
-  void didUpdateWidget(covariant JournalEntryPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.isDarkMode != widget.isDarkMode) {
-      setState(() {}); // rebuild when theme changes
-    }
-  }
-
-  Future<void> saveEntry() async {
+  // ------------------- SAVE ENTRY -------------------
+  Future<String> saveEntry() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
+    if (user == null) return "";
 
     final data = {
       "uid": user.uid,
-      "title": _titleController.text,
-      "content": _contentController.text,
+      "title": _titleController.text.trim(),
+      "content": _contentController.text.trim(),
       "timestamp": DateTime.now(),
+      "isPosted": false, // default
+      "likedBy": [],
     };
 
-    if (widget.docId == null) {
-      await FirebaseFirestore.instance.collection("journals").add(data);
+    if (savedDocId == null) {
+      final docRef = await FirebaseFirestore.instance
+          .collection("journals")
+          .add(data);
+      savedDocId = docRef.id;
     } else {
       await FirebaseFirestore.instance
           .collection("journals")
-          .doc(widget.docId)
+          .doc(savedDocId)
           .update(data);
     }
 
+    return savedDocId!;
+  }
+
+  // ------------------- POST LOGIC -------------------
+  Future<void> postEntry() async {
+    final id = await saveEntry(); // ensure entry exists
+    if (id.isEmpty) return;
+
+    // mark as posted
+    await FirebaseFirestore.instance.collection("journals").doc(id).update({
+      "isPosted": true,
+      "postedTimestamp": DateTime.now(),
+    });
+
+    // confirmation message
+    if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Posted Successfully!")));
+    }
+
+    // exit
     Navigator.pop(context);
   }
 
-  void _onNavTap(int index) {
-    widget.onTabChange(index);
+  // ------------------- FORMATTING -------------------
+  void _applyFormat(String type) {
+    final sel = _contentController.selection;
+    if (!sel.isValid || sel.isCollapsed) return;
+
+    final full = _contentController.text;
+    final selected = full.substring(sel.start, sel.end);
+
+    String wrapped = selected;
+
+    switch (type) {
+      case "bold":
+        wrapped = "$selected**";
+        break;
+      case "italic":
+        wrapped = "$selected";
+        break;
+      case "underline":
+        wrapped = "$selected";
+        break;
+    }
+
+    final newText = full.replaceRange(sel.start, sel.end, wrapped);
+    _contentController.text = newText;
+
+    _contentController.selection = TextSelection.collapsed(
+      offset: sel.start + wrapped.length,
+    );
   }
 
   void _openTray() {
@@ -106,7 +152,7 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
   Widget _trayButton(String label, VoidCallback onTap) {
     return GestureDetector(
       onTap: () {
-        Navigator.pop(context); // close tray
+        Navigator.pop(context);
         onTap();
       },
       child: Container(
@@ -120,36 +166,6 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       ),
-    );
-  }
-
-  void _applyFormat(String type) {
-    final sel = _contentController.selection;
-    if (!sel.isValid || sel.isCollapsed) return;
-
-    final full = _contentController.text;
-    final selected = full.substring(sel.start, sel.end);
-
-    String wrapped = selected;
-
-    switch (type) {
-      case "bold":
-        wrapped = "**$selected**";
-        break;
-      case "underline":
-        wrapped = "__$selected\_\_";
-        break;
-      case "italic":
-        wrapped = "*$selected*";
-        break;
-    }
-
-    final newText = full.replaceRange(sel.start, sel.end, wrapped);
-    _contentController.text = newText;
-
-    // Move cursor after inserted formatting
-    _contentController.selection = TextSelection.collapsed(
-      offset: sel.start + wrapped.length,
     );
   }
 
@@ -167,10 +183,7 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
                 padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 child: BackgroundHeader(),
               ),
-
               const SizedBox(height: 10),
-
-              // ← THE EDITOR UI NOW LIVES IN ITS OWN FILE
               Expanded(
                 child: JournalEditor(
                   titleCtrl: _titleController,
@@ -185,13 +198,30 @@ class _JournalEntryPageState extends State<JournalEntryPage> {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             FloatingActionButton(
-              heroTag: "saveBtn",
-              onPressed: saveEntry,
+              heroTag: "saveBtn_editor",
+              onPressed: () async {
+                await saveEntry();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Saved Successfully!")),
+                  );
+                }
+                Navigator.pop(context);
+              },
               child: const Icon(Icons.save),
             ),
             const SizedBox(height: 16),
+
             FloatingActionButton(
-              heroTag: "trayBtn",
+              heroTag: "postBtn_editor",
+              backgroundColor: Colors.orangeAccent,
+              onPressed: postEntry,
+              child: const Icon(Icons.send),
+            ),
+            const SizedBox(height: 16),
+
+            FloatingActionButton(
+              heroTag: "trayBtn_editor",
               onPressed: _openTray,
               child: const Icon(Icons.more_horiz),
             ),

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import '../widgets/background.dart'; // PRSNL background + header
-import '../navbar.dart'; // Your custom navbar
+import 'package:flutter/scheduler.dart';
+import 'package:flutter_llama/flutter_llama.dart';
+
+import '../widgets/background.dart';
+import '../navbar.dart';
 
 class CompanionPage extends StatefulWidget {
   const CompanionPage({super.key});
@@ -11,33 +14,143 @@ class CompanionPage extends StatefulWidget {
 
 class _CompanionPageState extends State<CompanionPage> {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
-  // Initial greeting
+  // LLM Instance
+  final FlutterLlama _llama = FlutterLlama.instance;
+
+  bool _isModelLoaded = false;
+  bool _isGenerating = false;
+
   final List<Map<String, String>> messages = [
     {"text": "Hello, what can I do for you today?", "sender": "bot"},
   ];
 
-  final String userAvatar = "assets/user.png"; // replace if needed
-  final String ghostAvatar = "assets/ghost.png"; // your ghost
+  final String userAvatar = "assets/user.png";
+  final String ghostAvatar = "assets/ghost.png";
 
-  int _selectedIndex = 2; // third tile
+  @override
+  void initState() {
+    super.initState();
+    _loadLlamaModel();
+  }
 
-  void _onNavTap(int index) {
-    setState(() => _selectedIndex = index);
+  @override
+  void dispose() {
+    _llama.unloadModel();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
-    // Navigation logic — modify once real pages are connected
-    switch (index) {
-      case 0:
-        Navigator.pop(context); // back to home
-        break;
-      default:
-        // placeholder
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Page $index coming soon")));
+  // ------------------------------------------------------------
+  //                         MODEL LOADING
+  // ------------------------------------------------------------
+  Future<void> _loadLlamaModel() async {
+    const String modelAssetPath =
+        'assets/models/phi-1_5-empathetic-q4_k_m.gguf';
+
+    try {
+      _addBotMessage("Loading 1.4 GB GGUF model with GPU acceleration...");
+
+      final config = LlamaConfig(
+        modelPath: modelAssetPath,
+        nThreads: 6,
+        nGpuLayers: -1,
+        contextSize: 2048,
+        useGpu: true,
+      );
+
+      final success = await _llama.loadModel(config);
+
+      if (success) {
+        setState(() => _isModelLoaded = true);
+        _addBotMessage("✅ Model loaded! GPU is active. Ask Lumi anything!");
+      } else {
+        _addBotMessage("❌ Error: Load failed. Check console for native logs.");
+      }
+    } catch (e) {
+      _addBotMessage("❌ Critical Error: Failed to load model. $e");
     }
   }
 
+  // ------------------------------------------------------------
+  //                        MESSAGE SENDING
+  // ------------------------------------------------------------
+  void _sendMessage() {
+    final String text = _controller.text.trim();
+
+    if (text.isEmpty || !_isModelLoaded || _isGenerating) return;
+
+    setState(() {
+      messages.add({"text": text, "sender": "user"});
+      messages.add({"text": "", "sender": "bot"}); // placeholder for streaming
+      _controller.clear();
+      _isGenerating = true;
+    });
+
+    _scrollToBottom();
+
+    final int botMessageIndex = messages.length - 1;
+
+    final String fullPrompt =
+        "Instruction: You are an empathetic companion named Lumi. Respond concisely and helpfully.\n"
+        "User: $text\n"
+        "Lumi:";
+
+    final params = GenerationParams(
+      prompt: fullPrompt,
+      temperature: 0.7,
+      maxTokens: 500,
+      repeatPenalty: 1.1,
+    );
+
+    _llama
+        .generateStream(params)
+        .listen(
+          (token) {
+            setState(() {
+              messages[botMessageIndex]["text"] =
+                  (messages[botMessageIndex]["text"] ?? "") + token;
+            });
+            _scrollToBottom();
+          },
+          onDone: () {
+            setState(() => _isGenerating = false);
+          },
+          onError: (error) {
+            setState(() {
+              _addBotMessage("An error occurred during generation: $error");
+              _isGenerating = false;
+            });
+          },
+        );
+  }
+
+  // ------------------------------------------------------------
+  //                          HELPERS
+  // ------------------------------------------------------------
+  void _addBotMessage(String text) {
+    setState(() {
+      messages.add({"text": text, "sender": "bot"});
+    });
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // ------------------------------------------------------------
+  //                           UI BUILD
+  // ------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
     return BackgroundContainer(
@@ -46,35 +159,44 @@ class _CompanionPageState extends State<CompanionPage> {
       overrideBackground: true,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-
         body: SafeArea(
           child: Column(
             children: [
               const SizedBox(height: 8),
-
-              // ---------- PRSNL Ghost Header ----------
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16),
                 child: BackgroundHeader(overrideBackground: true),
               ),
-
               const SizedBox(height: 12),
 
-              // ---------- Title ----------
-              const Text(
-                "Lumi",
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
+              // ----------------- Title & Status -----------------
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    "Lumi",
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    radius: 6,
+                    backgroundColor: _isGenerating
+                        ? Colors.amber
+                        : (_isModelLoaded ? Colors.green : Colors.red),
+                  ),
+                ],
               ),
 
               const SizedBox(height: 16),
 
-              // ---------- Chat Messages ----------
+              // ----------------- Chat Messages -----------------
               Expanded(
                 child: ListView.builder(
+                  controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
@@ -92,7 +214,7 @@ class _CompanionPageState extends State<CompanionPage> {
                           Stack(
                             clipBehavior: Clip.none,
                             children: [
-                              // ---------- Bubble ----------
+                              // Bubble
                               Container(
                                 constraints: BoxConstraints(
                                   maxWidth:
@@ -137,7 +259,7 @@ class _CompanionPageState extends State<CompanionPage> {
                                 ),
                               ),
 
-                              // ---------- Avatar ----------
+                              // Avatar
                               Positioned(
                                 top: -16,
                                 right: isUser ? -12 : null,
@@ -164,7 +286,7 @@ class _CompanionPageState extends State<CompanionPage> {
                 ),
               ),
 
-              // ---------- Input box ----------
+              // ----------------- Input Box -----------------
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -180,10 +302,16 @@ class _CompanionPageState extends State<CompanionPage> {
                     Expanded(
                       child: TextField(
                         controller: _controller,
+                        onSubmitted: (value) => _sendMessage(),
+                        enabled: _isModelLoaded && !_isGenerating,
                         style: const TextStyle(color: Colors.black),
-                        decoration: const InputDecoration(
-                          hintText: "Type a message...",
-                          hintStyle: TextStyle(
+                        decoration: InputDecoration(
+                          hintText: _isModelLoaded
+                              ? (_isGenerating
+                                    ? "Lumi is thinking..."
+                                    : "Type a message...")
+                              : "Loading Model...",
+                          hintStyle: const TextStyle(
                             color: Color.fromARGB(172, 20, 20, 20),
                           ),
                           border: InputBorder.none,
@@ -191,15 +319,9 @@ class _CompanionPageState extends State<CompanionPage> {
                       ),
                     ),
                     IconButton(
-                      onPressed: () {
-                        final text = _controller.text.trim();
-                        if (text.isEmpty) return;
-
-                        setState(() {
-                          messages.add({"text": text, "sender": "user"});
-                          _controller.clear();
-                        });
-                      },
+                      onPressed: _isModelLoaded && !_isGenerating
+                          ? _sendMessage
+                          : null,
                       icon: const Icon(Icons.send, color: Colors.black),
                     ),
                   ],

@@ -40,6 +40,13 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    externalNativeBuild {
+        cmake {
+            // Set the version to the latest one you installed in the SDK tools
+            version = "3.22.1" 
+        }
+    }
 }
 
 flutter {

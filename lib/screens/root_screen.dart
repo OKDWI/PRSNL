@@ -5,11 +5,12 @@ import 'package:prsnl_final/screens/chat_screen.dart';
 import '../widgets/background.dart';
 import 'package:prsnl_final/navbar.dart';
 import 'zengardenpage.dart';
-
-
+import 'LibraryPage.dart';
+import 'echoes.dart';
 import 'home_screen.dart';
 import 'journal_home.dart';
-
+import 'profile_screen.dart';   // ← NEW
+import 'anonymous_library.dart';
 class RootScreen extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
@@ -20,6 +21,11 @@ class RootScreen extends StatefulWidget {
     required this.onToggleTheme,
   });
 
+  // Allows any child page to call: RootScreen.of(context).jumpToTab(index)
+  static _RootScreenState of(BuildContext context) {
+    return context.findAncestorStateOfType<_RootScreenState>()!;
+  }
+
   @override
   State<RootScreen> createState() => _RootScreenState();
 }
@@ -27,81 +33,82 @@ class RootScreen extends StatefulWidget {
 class _RootScreenState extends State<RootScreen> {
   int _index = 0;
 
-  // editor arguments
-  String? _editorDocId;
-  String? _editorTitle;
-  String? _editorContent;
-
-  void _openEditor({String? docId, String? title, String? content}) {
-    setState(() {
-      _editorDocId = docId;
-      _editorTitle = title;
-      _editorContent = content;
-      _index = 2; // NEW: Editor moved to index 2
-    });
-  }
-
-  void _clearEditorArgs() {
-    _editorDocId = null;
-    _editorTitle = null;
-    _editorContent = null;
+  // --------------------- TAB SWITCHING ----------------------
+  void jumpToTab(int index) {
+    setState(() => _index = index);
   }
 
   void _onNavTap(int i) {
     setState(() => _index = i);
   }
 
-  // ---------------------------- PAGE ORDER ----------------------------
-  // 0 → HomePage
-  // 1 → JournalHome (Echoes)
-  // 2 → Editor
-  // --------------------------------------------------------------------
-  // pages array — using builders so we can pass latest editor args
+  // ------------------ OPEN PROFILE PAGE ---------------------
+  void _openProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfilePage(
+          isDarkMode: widget.isDarkMode,
+          onToggleTheme: widget.onToggleTheme,
+        ),
+      ),
+    );
+  }
+
+  // ------------------------- PAGES --------------------------
   List<Widget> get _pages => [
-    // 0 → Home Screen
-    HomePage(
-      isDarkMode: widget.isDarkMode,
-      onToggleTheme: widget.onToggleTheme,
-    ),
+        // 0 → Home
+        HomePage(
+          isDarkMode: widget.isDarkMode,
+          onToggleTheme: widget.onToggleTheme,
+          onOpenTab: jumpToTab,
+          onLumiTap: _openProfile,
+        ),
 
-    // 1 → Journal (Echoes)
-    JournalHomePage(
-      isDarkMode: widget.isDarkMode,
-      onToggleTheme: widget.onToggleTheme,
-      onOpenEditor: ({String? docId, String? title, String? content}) {
-        _openEditor(docId: docId, title: title, content: content);
-      },
-    ),
+        // 1 → Echoes
+        EchoesWrapper(
+          isDarkMode: widget.isDarkMode,
+          onToggleTheme: widget.onToggleTheme,
+          onLumiTap: _openProfile,
+        ),
 
-    const Placeholder(),
+        // 2 → Library / Anonymous Library
+        AnonymousLibraryWrapper(
+          isDarkMode: widget.isDarkMode,
+          onToggleTheme: widget.onToggleTheme,
+        ),
 
-    // 2 → Companion Chat Screen (NEW)
-    CompanionPage(),
+        // 3 → Companion Chat
+        CompanionPage(),
 
-    ZenGardenPage(
-    isDarkMode: widget.isDarkMode,
-    onToggleTheme: widget.onToggleTheme,
-    onNavTap: _onNavTap,
-  ),
-  ];
+        // 4 → Zen Garden
+        ZenGardenPage(
+          isDarkMode: widget.isDarkMode,
+          onToggleTheme: widget.onToggleTheme,
+          onNavTap: jumpToTab,
+          onLumiTap: _openProfile,
+        ),
+      ];
 
-  // -------------------------- ANDROID BACK BEHAVIOR --------------------
+  // ------------------------ BACK BUTTON ---------------------
   Future<bool> _onWillPop() async {
     if (_index != 0) {
-      setState(() => _index = 0); // go to HomePage
+      setState(() => _index = 0);
       return false;
     }
     return true;
   }
 
+  // ------------------------- UI BUILD ------------------------
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        backgroundColor: Colors.transparent, // pages provide background
+        backgroundColor: Colors.transparent,
         body: IndexedStack(index: _index, children: _pages),
-        bottomNavigationBar: MyNavBar(selectedIndex: _index, onTap: _onNavTap),
+        bottomNavigationBar:
+            MyNavBar(selectedIndex: _index, onTap: _onNavTap),
       ),
     );
   }

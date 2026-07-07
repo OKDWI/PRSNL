@@ -9,19 +9,18 @@ import '../widgets/background.dart';
 class JournalHomePage extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
+  final VoidCallback? onLumiTap;
 
   /// NEW: RootScreen callback
-  final void Function({
-    String? docId,
-    String? title,
-    String? content,
-  }) onOpenEditor;
+  final void Function({String? docId, String? title, String? content})
+  onOpenEditor;
 
   const JournalHomePage({
     Key? key,
     required this.isDarkMode,
     required this.onToggleTheme,
     required this.onOpenEditor,
+    this.onLumiTap,
   }) : super(key: key);
 
   @override
@@ -87,9 +86,9 @@ class _JournalHomePageState extends State<JournalHomePage> {
                         final content = data["content"] ?? "";
                         final timestamp = data["timestamp"] as Timestamp?;
                         final dateStr = timestamp != null
-                            ? DateFormat.yMMMd()
-                                .add_jm()
-                                .format(timestamp.toDate())
+                            ? DateFormat.yMMMd().add_jm().format(
+                                timestamp.toDate(),
+                              )
                             : "";
 
                         return Card(
@@ -142,16 +141,6 @@ class _JournalHomePageState extends State<JournalHomePage> {
                   },
                 ),
               ),
-
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ElevatedButton(
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                  },
-                  child: const Text("Logout"),
-                ),
-              ),
             ],
           ),
         ),
@@ -159,11 +148,7 @@ class _JournalHomePageState extends State<JournalHomePage> {
         floatingActionButton: FloatingActionButton(
           // NEW: no Navigator.push
           onPressed: () {
-            widget.onOpenEditor(
-              docId: null,
-              title: "",
-              content: "",
-            );
+            widget.onOpenEditor(docId: null, title: "", content: "");
           },
           child: const Icon(Icons.add),
         ),

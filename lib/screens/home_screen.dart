@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import '../widgets/background.dart'; // 🌟 Your modular background
+import '../widgets/background.dart';
 
-import 'journal_home.dart'; // Echoes becomes JournalHomePage
+// These imports REMAIN because HomePage only *references* them visually.
+import 'journal_home.dart';
 import 'LibraryPage.dart';
 import 'Companion.dart';
 import 'ZenGardenPage.dart';
@@ -10,10 +11,18 @@ class HomePage extends StatefulWidget {
   final bool isDarkMode;
   final VoidCallback onToggleTheme;
 
+  /// NEW — tells RootScreen which tab to switch to
+  final void Function(int index) onOpenTab;
+
+  /// NEW — Lumi tap → open ProfilePage
+  final VoidCallback? onLumiTap;
+
   const HomePage({
     super.key,
     required this.isDarkMode,
     required this.onToggleTheme,
+    required this.onOpenTab,
+    this.onLumiTap, // ← NEW
   });
 
   @override
@@ -66,9 +75,11 @@ class _HomePageState extends State<HomePage>
         body: SafeArea(
           child: Stack(
             children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 8, left: 16, right: 16),
-                child: BackgroundHeader(),
+              Padding(
+                padding: const EdgeInsets.only(top: 8, left: 16, right: 16),
+                child: BackgroundHeader(
+                  onLumiTap: widget.onLumiTap, // ← NEW
+                ),
               ),
 
               AnimatedBuilder(
@@ -96,73 +107,58 @@ class _HomePageState extends State<HomePage>
                                       mainAxisSpacing: 20,
                                     ),
                                 children: [
+                                  // --------------------------------------------------------
+                                  //  Echoes → TAB 1
+                                  // --------------------------------------------------------
                                   _buildTile(
                                     title: "Echoes",
                                     image: "assets/echo.png",
                                     tint: Colors.yellow.shade200.withOpacity(
                                       0.7,
                                     ),
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => JournalHomePage(
-                                          isDarkMode: widget.isDarkMode,
-                                          onToggleTheme: widget.onToggleTheme,
-                                          onOpenEditor:
-                                              ({docId, title, content}) {
-                                                debugPrint(
-                                                  "onOpenEditor called",
-                                                );
-                                              },
-                                        ),
-                                      ),
-                                    ),
+                                    onTap: () {
+                                      widget.onOpenTab(1);
+                                    },
                                   ),
 
+                                  // --------------------------------------------------------
+                                  //  Anonymous Library → TAB 2
+                                  // --------------------------------------------------------
                                   _buildTile(
                                     title: "Anonymous Library",
                                     image: "assets/anon.png",
                                     tint: Colors.grey.shade300.withOpacity(0.7),
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const PlaceholderPage(
-                                          "Library Page",
-                                        ),
-                                      ),
-                                    ),
+                                    onTap: () {
+                                      widget.onOpenTab(2);
+                                    },
                                   ),
 
+                                  // --------------------------------------------------------
+                                  //  Companion → TAB 3
+                                  // --------------------------------------------------------
                                   _buildTile(
                                     title: "Companion",
                                     image: "assets/ghost.png",
                                     tint: Colors.green.shade200.withOpacity(
                                       0.7,
                                     ),
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const PlaceholderPage(
-                                          "Companion Page",
-                                        ),
-                                      ),
-                                    ),
+                                    onTap: () {
+                                      widget.onOpenTab(3);
+                                    },
                                   ),
 
+                                  // --------------------------------------------------------
+                                  //  Zen Garden → TAB 4
+                                  // --------------------------------------------------------
                                   _buildTile(
                                     title: "Zen Garden",
                                     image: "assets/zen.png",
                                     tint: Colors.lightBlue.shade200.withOpacity(
                                       0.7,
                                     ),
-                                    onTap: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const PlaceholderPage(
-                                          "Zen Garden Page",
-                                        ),
-                                      ),
-                                    ),
+                                    onTap: () {
+                                      widget.onOpenTab(4);
+                                    },
                                   ),
                                 ],
                               ),
@@ -182,7 +178,7 @@ class _HomePageState extends State<HomePage>
   }
 
   // -----------------------------------------------------------------------
-  // 🌟 Glassy Tile Builder
+  // 🌟 Glassy Tile Builder (unchanged)
   // -----------------------------------------------------------------------
   Widget _buildTile({
     required String title,
@@ -209,11 +205,8 @@ class _HomePageState extends State<HomePage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // ---- ICON AS IMAGE ----
             Image.asset(image, height: 120, fit: BoxFit.contain),
-
             const SizedBox(height: 14),
-
             Text(
               title,
               textAlign: TextAlign.center,
@@ -224,27 +217,6 @@ class _HomePageState extends State<HomePage>
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// -----------------------------------------------------------------------
-// 🟪 Placeholder Pages — so navigation won't break
-// -----------------------------------------------------------------------
-class PlaceholderPage extends StatelessWidget {
-  final String label;
-  const PlaceholderPage(this.label, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(label)),
-      body: Center(
-        child: Text(
-          "$label — Coming soon",
-          style: const TextStyle(fontSize: 22),
         ),
       ),
     );

@@ -5,15 +5,19 @@ class BackgroundContainer extends StatelessWidget {
   final Widget child;
   final VoidCallback onToggleTheme;
 
-  // NEW: simple background override toggle
+  /// Whether to always use bg_wood and hide sun/moon + header
   final bool overrideBackground;
+
+  /// (Optional) Lumi tap callback
+  final VoidCallback? onLumiTap;
 
   const BackgroundContainer({
     Key? key,
     required this.isDarkMode,
     required this.child,
     required this.onToggleTheme,
-    this.overrideBackground = false,     // 👈 default = normal behavior
+    this.overrideBackground = false,
+    this.onLumiTap,
   }) : super(key: key);
 
   @override
@@ -43,7 +47,7 @@ class BackgroundContainer extends StatelessWidget {
 
         Positioned.fill(child: child),
 
-        // ---------- SUN / MOON (HIDDEN IF OVERRIDDEN) ----------
+        // ---------- SUN / MOON (Hidden if override ON) ----------
         if (!overrideBackground)
           Positioned(
             top: 20,
@@ -77,9 +81,8 @@ class BackgroundContainer extends StatelessWidget {
     );
   }
 
-  // ---------- DECIDE BACKGROUND ----------
+  // ---------- DECIDE BACKGROUND IMAGE ----------
   Widget _buildBackgroundImage() {
-    // If override is ON, ALWAYS use bg_wood.png
     final backgroundAsset = overrideBackground
         ? "assets/bg_wood.png"
         : (isDarkMode ? "assets/bg_night.png" : "assets/bg_day.png");
@@ -97,16 +100,35 @@ class BackgroundContainer extends StatelessWidget {
 
 class BackgroundHeader extends StatelessWidget {
   final bool overrideBackground;
-  const BackgroundHeader({Key? key,  this.overrideBackground = false}) : super(key: key);
+
+  /// NEW: Make Lumi clickable
+  final VoidCallback? onLumiTap;
+
+  const BackgroundHeader({
+    Key? key,
+    this.overrideBackground = false,
+    this.onLumiTap,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    print(overrideBackground);
-    if (!overrideBackground) {
+    print("BackgroundHeader override = $overrideBackground");
+
+    // Hide header completely if override ON
+    if (overrideBackground) {
+      return SizedBox.shrink();
+    }
+
     return Row(
       children: [
-        Image.asset("assets/ghost.png", height: 40),
+        // ---------- LUMI CLICKABLE ----------
+        GestureDetector(
+          onTap: onLumiTap,
+          child: Image.asset("assets/ghost.png", height: 40),
+        ),
+
         const SizedBox(width: 12),
+
         const Expanded(
           child: Text(
             "Prsnl",
@@ -119,11 +141,9 @@ class BackgroundHeader extends StatelessWidget {
             ),
           ),
         ),
+
         const SizedBox(width: 52),
       ],
-    );}
-    else {
-    return SizedBox.shrink();
-    }
+    );
   }
 }
